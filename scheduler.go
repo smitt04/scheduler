@@ -6,13 +6,10 @@ package scheduler
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	"github.com/rakanalh/scheduler/storage"
-	"github.com/rakanalh/scheduler/task"
+	"github.com/smitt04/scheduler/storage"
+	"github.com/smitt04/scheduler/task"
 )
 
 // Scheduler is used to schedule tasks. It holds information about those tasks
@@ -78,14 +75,16 @@ func (scheduler *Scheduler) RunEvery(duration time.Duration, function task.Funct
 // Start will run the scheduler's timer and will trigger the execution
 // of tasks depending on their schedule.
 func (scheduler *Scheduler) Start() error {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// sigChan := make(chan os.Signal, 1)
+	// signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Populate tasks from storage
 	if err := scheduler.populateTasks(); err != nil {
+		log.Println("Failed to populate")
 		return err
 	}
 	if err := scheduler.persistRegisteredTasks(); err != nil {
+		log.Println("failed to register")
 		return err
 	}
 	scheduler.runPending()
@@ -96,10 +95,13 @@ func (scheduler *Scheduler) Start() error {
 			select {
 			case <-ticker.C:
 				scheduler.runPending()
-			case <-sigChan:
-				scheduler.stopChan <- true
-			case <-scheduler.stopChan:
-				close(scheduler.stopChan)
+			// case <-sigChan:
+			// 	scheduler.stopChan <- true
+			case _, ok := <-scheduler.stopChan:
+				if ok {
+					log.Println("Stopping chan", scheduler.stopChan)
+					close(scheduler.stopChan)
+				}
 			}
 		}
 	}()
@@ -110,6 +112,7 @@ func (scheduler *Scheduler) Start() error {
 // Stop will put the scheduler to halt
 func (scheduler *Scheduler) Stop() {
 	scheduler.taskStore.store.Close()
+	log.Println("closing stop chan")
 	scheduler.stopChan <- true
 }
 
